@@ -5,8 +5,12 @@
 
 use log::{info, error, debug};
 use serde::{Serialize, Deserialize};
-use std::fs;
+ 
 use std::path::Path;
+use std::fs::File;
+use std::io::{self, Read, Write};
+
+ 
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -62,53 +66,42 @@ impl BackupCopyProcessor {
 
 /// Main processing function
 pub fn run(verbose: bool, input: Option<String>, output: Option<String>) -> Result<()> {
-    if verbose {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Debug)
-            .init();
-    } else {
-        env_logger::init();
-    }
-    
-    info!("Starting BackupCopy processing");
-    
-    let mut processor = BackupCopyProcessor::new(verbose);
-    
-    // Read input
-    let input_data = match input {
+    // Read from input file or stdin
+    let mut input_data = String::new();
+
+    match input {
         Some(path) => {
-            info!("Reading from file: {}", path);
-            fs::read_to_string(&path)?
-        },
-        None => {
-            info!("Using default test data");
-            "Sample data for processing".to_string()
+            if verbose {
+                println!("Reading from input file: {}", path);
+            }
+            let mut file = File::open(path)?;
+            file.read_to_string(&mut input_data)?;
         }
-    };
-    
-    // Process data
-    let result = processor.process(&input_data)?;
-    
-    if verbose {
-        debug!("Processing result: {:#?}", result);
+        None => {
+            if verbose {
+                println!("Reading from standard input...");
+            }
+            io::stdin().read_to_string(&mut input_data)?;
+        }
     }
-    
-    // Save output
-    let output_json = serde_json::to_string_pretty(&result)?;
-    
+
+    // Write to output file or stdout
     match output {
         Some(path) => {
-            info!("Writing results to: {}", path);
-            fs::write(&path, &output_json)?;
-        },
+            if verbose {
+                println!("Writing to output file: {}", path);
+            }
+            let mut file = File::create(path)?;
+            file.write_all(input_data.as_bytes())?;
+        }
         None => {
-            println!("{}", output_json);
+            if verbose {
+                println!("Writing to standard output...");
+            }
+            println!("{}", input_data);
         }
     }
-    
-    let stats = processor.get_stats();
-    info!("Processing complete. Stats: {}", stats);
-    
+
     Ok(())
 }
 
